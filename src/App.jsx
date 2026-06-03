@@ -196,64 +196,77 @@ function CursorMagic() {
 
 function MusicToggle() {
   const [playing, setPlaying] = useState(false);
-  const synthRef = useRef(null);
+  const [blocked, setBlocked] = useState(false);
+  const audioRef = useRef(null);
+  const musicSrc = `${import.meta.env.BASE_URL}audio/killer.mp3`;
+
+  const startMusic = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.volume = 0.48;
+    audio.loop = true;
+
+    try {
+      await audio.play();
+      setPlaying(true);
+      setBlocked(false);
+    } catch {
+      setPlaying(false);
+      setBlocked(true);
+    }
+  };
 
   useEffect(() => {
-    if (!playing) {
-      if (synthRef.current) {
-        window.clearInterval(synthRef.current.interval);
-        synthRef.current.context.close();
-        synthRef.current = null;
+    startMusic();
+
+    const unlockAudio = () => {
+      if (audioRef.current?.paused) {
+        startMusic();
       }
-      return undefined;
-    }
-
-    const AudioEngine = window.AudioContext || window.webkitAudioContext;
-    if (!AudioEngine) {
-      setPlaying(false);
-      return undefined;
-    }
-
-    const context = new AudioEngine();
-    const masterGain = context.createGain();
-    const notes = [261.63, 329.63, 392, 523.25, 440, 392, 349.23, 329.63];
-    let index = 0;
-
-    masterGain.gain.value = 0.028;
-    masterGain.connect(context.destination);
-
-    const playNote = () => {
-      const oscillator = context.createOscillator();
-      const envelope = context.createGain();
-
-      oscillator.type = 'sine';
-      oscillator.frequency.value = notes[index % notes.length];
-      envelope.gain.setValueAtTime(0.0001, context.currentTime);
-      envelope.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.08);
-      envelope.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 1.45);
-
-      oscillator.connect(envelope);
-      envelope.connect(masterGain);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 1.55);
-      index += 1;
     };
 
-    playNote();
-    const interval = window.setInterval(playNote, 1400);
-    synthRef.current = { context, interval };
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
 
     return () => {
-      window.clearInterval(interval);
-      context.close();
-      synthRef.current = null;
+      window.removeEventListener('pointerdown', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
     };
-  }, [playing]);
+  }, []);
+
+  const toggleMusic = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audio.paused) {
+      await startMusic();
+    } else {
+      audio.pause();
+      setPlaying(false);
+      setBlocked(false);
+    }
+  };
 
   return (
-    <button className="music-button" onClick={() => setPlaying((value) => !value)} aria-label="Toggle romantic music">
-      {playing ? <FaPause /> : <FaMusic />}
-    </button>
+    <>
+      <audio
+        ref={audioRef}
+        src={musicSrc}
+        preload="auto"
+        loop
+        playsInline
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
+      <button
+        className={`music-button ${blocked ? 'needs-tap' : ''}`}
+        onClick={toggleMusic}
+        aria-label="Toggle romantic music"
+      >
+        {playing ? <FaPause /> : <FaMusic />}
+      </button>
+    </>
   );
 }
 
